@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dégradation PFD — Architectures SIS</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap');
+
+  /* =============================================
+     FOND TRANSPARENT — s'adapte au thème WP
+  ============================================= */
+  :root {
+    --bg:      transparent;
+    --panel:   rgba(15, 22, 35, 0.82);
+    --panel2:  rgba(19, 29, 46, 0.85);
+    --border:  rgba(56, 120, 200, 0.2);
+    --accent1: #38bdf8;
+    --accent2: #fb923c;
+    --accent3: #facc15;
+    --green:   #4ade80;
+    --red:     #f87171;
+    --text:    #e2e8f0;
+    --muted:   #7a8fa8;
+    --radius:  10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: transparent !important;
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    width: 100%;
+    /* hauteur auto pour que l'iFrame puisse s'adapter */
+    height: auto;
+    overflow-x: hidden;
+  }
+
+  .wrapper {
+    padding: 1.2rem 1rem 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  /* ---- HEADER ---- */
+  header {
+    margin-bottom: 1.2rem;
+    padding-bottom: 0.9rem;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: clamp(1rem, 2.5vw, 1.35rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #fff;
+    line-height: 1.25;
+  }
+  header p {
+    font-size: clamp(0.6rem, 1.5vw, 0.72rem);
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin-top: 0.25rem;
+  }
+
+  /* ---- LAYOUT : sidebar + graphique ---- */
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 1rem;
+    align-items: start;
+  }
+
+  /* Tablette */
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+    .sidebar .card.params-card,
+    .sidebar .card.results-card { grid-column: span 2; }
+  }
+
+  /* Mobile */
+  @media (max-width: 520px) {
+    .wrapper { padding: 0.8rem 0.6rem 1.2rem; }
+    .sidebar { grid-template-columns: 1fr; }
+    .sidebar .card.params-card,
+    .sidebar .card.results-card { grid-column: auto; }
+    .chart-wrap { height: 260px !important; }
+  }
+
+  /* ---- CARDS ---- */
+  .sidebar { display: flex; flex-direction: column; gap: 0.8rem; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.1rem;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  .card-title {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 0.8rem;
+  }
+
+  /* ---- BOUTONS SIL / ARCH ---- */
+  .btn-group { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+  .btn-opt {
+    flex: 1;
+    min-width: 60px;
+    padding: 0.42rem 0.3rem;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(0.62rem, 1.4vw, 0.72rem);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .btn-opt:hover { border-color: var(--accent1); color: var(--accent1); }
+  .btn-opt.active-blue  { background: var(--accent1); border-color: var(--accent1); color: #07090f; font-weight: 700; }
+  .btn-opt.active-green { background: var(--green);   border-color: var(--green);   color: #07090f; font-weight: 700; }
+  .btn-opt.active-gold  { background: var(--accent3); border-color: var(--accent3); color: #07090f; font-weight: 700; }
+  .btn-opt.active-org   { background: var(--accent2); border-color: var(--accent2); color: #07090f; font-weight: 700; }
+
+  .info-box {
+    margin-top: 0.55rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(0.6rem, 1.3vw, 0.7rem);
+    color: var(--muted);
+    line-height: 1.85;
+  }
+
+  /* ---- SLIDER ---- */
+  .slider-label { font-size: clamp(0.6rem, 1.3vw, 0.7rem); color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+  .slider-wrap input[type=range] {
+    width: 100%;
+    accent-color: var(--accent2);
+    cursor: pointer;
+    margin-top: 0.4rem;
+    height: 4px;
+  }
+  .slider-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(0.68rem, 1.5vw, 0.8rem);
+    color: var(--accent2);
+    font-weight: 700;
+    margin-top: 0.3rem;
+  }
+
+  /* ---- PARAMS FIXES ---- */
+  .fixed-params { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .fparam {
+    background: rgba(56,189,248,0.08);
+    border: 1px solid rgba(56,189,248,0.2);
+    border-radius: 5px;
+    padding: 0.2rem 0.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(0.6rem, 1.3vw, 0.7rem);
+    color: var(--accent1);
+  }
+
+  /* ---- MÉTRIQUES ---- */
+  .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.2rem; }
+  .metric {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.65rem 0.75rem;
+    backdrop-filter: blur(6px);
+  }
+  .metric.full { grid-column: span 2; }
+  .m-lbl {
+    font-size: clamp(0.54rem, 1.2vw, 0.6rem);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .m-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(0.78rem, 1.8vw, 0.92rem);
+    font-weight: 700;
+    margin-top: 0.18rem;
+  }
+  .m-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(0.54rem, 1.2vw, 0.62rem);
+    color: var(--muted);
+    margin-top: 0.12rem;
+    line-height: 1.45;
+    white-space: pre-line;
+  }
+
+  /* ---- GRAPHIQUE ---- */
+  .chart-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.2rem;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  .chart-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.9rem;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+
+  .chart-title {
+    font-size: clamp(0.8rem, 2vw, 0.95rem);
+    font-weight: 700;
+    color: #fff;
+  }
+  .chart-sub {
+    font-size: clamp(0.58rem, 1.3vw, 0.68rem);
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin-top: 0.18rem;
+  }
+
+  .legend { display: flex; gap: 0.8rem; flex-wrap: wrap; align-items: center; }
+  .leg {
+    display: flex; align-items: center; gap: 0.35rem;
+    font-size: clamp(0.58rem, 1.3vw, 0.68rem);
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+  }
+  .leg-line { width: 18px; height: 2px; border-radius: 2px; flex-shrink: 0; }
+  .leg-dash  { width: 18px; border-top: 2px dashed; flex-shrink: 0; }
+
+  /* Hauteur graphique responsive */
+  .chart-wrap {
+    position: relative;
+    height: clamp(240px, 35vw, 380px);
+  }
+
+  /* ---- FORMULES ---- */
+  .formula-card {
+    margin-top: 0.9rem;
+    background: var(--panel2);
+    border: 1px solid rgba(56,189,248,0.13);
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(0.6rem, 1.3vw, 0.71rem);
+    color: var(--muted);
+    line-height: 2;
+    backdrop-filter: blur(6px);
+  }
+  .formula-card b   { color: var(--accent1); }
+  .formula-card .f2 { color: var(--accent2); }
+  .formula-card .fv { color: var(--text); }
+
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <header>
+    <h1>Dégradation de la PFD lors d'une défaillance d'architecture</h1>
+    <p>IEC 61508 &middot; Ti = 8 760 h (1 an) &middot; &beta; = 10% &middot; PFDcible = PFDmax / 2</p>
+  </header>
+
+  <div class="layout">
+
+    <!-- ===== SIDEBAR ===== -->
+    <div class="sidebar">
+
+      <div class="card">
+        <div class="card-title">Niveau SIL cible</div>
+        <div class="btn-group">
+          <button class="btn-opt" id="btn-sil1" onclick="setSIL(1)">SIL 1</button>
+          <button class="btn-opt" id="btn-sil2" onclick="setSIL(2)">SIL 2</button>
+          <button class="btn-opt" id="btn-sil3" onclick="setSIL(3)">SIL 3</button>
+        </div>
+        <div class="info-box" id="sil-info"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Architecture &amp; dégradation</div>
+        <div class="btn-group">
+          <button class="btn-opt" id="btn-arch-2oo3" onclick="setArch('2oo3')">2oo3 &rarr; 2oo2</button>
+          <button class="btn-opt" id="btn-arch-1oo2" onclick="setArch('1oo2')">1oo2 &rarr; 1oo1</button>
+        </div>
+        <div class="info-box" id="arch-info"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Moment de dégradation</div>
+        <div class="slider-label">0 &rarr; Ti (glisser pour déplacer)</div>
+        <div class="slider-wrap">
+          <input type="range" id="degradeFrac" min="0" max="1" value="0.5" step="0.01">
+          <div class="slider-val" id="degradeVal">—</div>
+        </div>
+      </div>
+
+      <div class="card params-card">
+        <div class="card-title">Paramètres fixés</div>
+        <div class="fixed-params">
+          <div class="fparam">Ti = 8 760 h</div>
+          <div class="fparam">&beta; = 10 %</div>
+          <div class="fparam" id="fparam-ldu">&lambda;du = —</div>
+        </div>
+      </div>
+
+      <div class="card results-card">
+        <div class="card-title">Résultats</div>
+        <div class="metrics">
+          <div class="metric">
+            <div class="m-lbl">PFDavg cible</div>
+            <div class="m-val" id="r-target" style="color:var(--accent1)">—</div>
+          </div>
+          <div class="metric">
+            <div class="m-lbl">PFD à fin Ti</div>
+            <div class="m-val" id="r-final" style="color:var(--accent2)">—</div>
+          </div>
+          <div class="metric full">
+            <div class="m-lbl">&#9201; Heures conformes après dégradation</div>
+            <div class="m-val" id="r-heures" style="color:var(--accent3)">—</div>
+            <div class="m-sub" id="r-heures-sub"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===== GRAPHIQUE ===== -->
+    <div>
+      <div class="chart-card">
+        <div class="chart-top">
+          <div>
+            <div class="chart-title" id="chart-title">PFD cumulée</div>
+            <div class="chart-sub">Accumulation continue — changement de pente au point de dégradation</div>
+          </div>
+          <div class="legend">
+            <div class="leg"><div class="leg-line" style="background:var(--accent1)"></div><span id="leg1">Phase initiale</span></div>
+            <div class="leg"><div class="leg-line" style="background:var(--accent2)"></div><span id="leg2">Phase dégradée</span></div>
+            <div class="leg"><div class="leg-dash" style="border-color:var(--accent3)"></div><span>PFDmax</span></div>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="myChart"></canvas>
+        </div>
+      </div>
+      <div class="formula-card" id="formula-box"></div>
+    </div>
+
+  </div><!-- /.layout -->
+</div><!-- /.wrapper -->
+
+<script>
+// =====================================================
+//  CONFIG
+// =====================================================
+const Ti   = 8760;
+const beta = 0.10;
+
+const SIL_DEF = {
+  1: { max: 1e-1, target: 5.1e-2, color: '#4ade80', activeClass: 'active-green' },
+  2: { max: 1e-2, target: 5.1e-3, color: '#38bdf8', activeClass: 'active-blue'  },
+  3: { max: 1e-3, target: 5.1e-4, color: '#facc15', activeClass: 'active-gold'  },
+};
+
+function q(t, ldu) { return 1 - Math.exp(-ldu * t); }
+
+function pfd_inst_2oo3(t, ldu) {
+  const qt = q(t, ldu);
+  return (1 - beta) * (3*qt*qt - 2*qt*qt*qt) + beta * qt;
+}
+function pfd_inst_1oo2(t, ldu) {
+  const qt = q(t, ldu);
+  return (1 - beta) * qt * qt + beta * qt;
+}
+function pfdavg_num(fn, ldu) {
+  const N = 500; let s = 0;
+  for (let i = 0; i < N; i++) s += fn((i + 0.5) * Ti / N, ldu);
+  return s / N;
+}
+
+const ARCH_DEF = {
+  '2oo3': {
+    labelA: '2oo3', labelB: '2oo2',
+    descA: 'Vote majoritaire 2/3 (redondance triple)',
+    descB: 'Vote 2/2 — perte d\'un équipement',
+    pfdavg: (ldu) => pfdavg_num(pfd_inst_2oo3, ldu),
+    pfdA:   (t, ldu) => pfd_inst_2oo3(t, ldu),
+    pfdB:   (tau, ldu) => q(tau, ldu),
+    formula: `
+      <b>Phase initiale — 2oo3 (avec CCF, &beta;=10%) :</b><br>
+      PFD(t) = <span class="fv">(1&minus;&beta;)&middot;[3q&sup2;&minus;2q&sup3;]</span> + <span class="fv">&beta;&middot;q(t)</span>
+      &nbsp;avec q(t) = 1&minus;e<sup>&minus;&lambda;du&middot;t</sup> &rarr; <em>convexe vers le haut</em><br><br>
+      <b class="f2">Phase dégradée — 2oo2 (sans &beta;) :</b><br>
+      &Delta;PFD(&tau;) = <span class="fv">1&minus;e<sup>&minus;&lambda;du&middot;&tau;</sup> &asymp; &lambda;du&middot;&tau;</span>
+      &nbsp;&rarr; régime quasi-linéaire, pente fortement accrue<br><br>
+      <span style="color:#facc15">PFD(t) = PFD(t&#8320;) + &Delta;PFD(t &minus; t&#8320;)</span>
+    `
+  },
+  '1oo2': {
+    labelA: '1oo2', labelB: '1oo1',
+    descA: 'Redondance parallèle (2 capteurs)',
+    descB: 'Simple capteur — perte d\'un équipement',
+    pfdavg: (ldu) => pfdavg_num(pfd_inst_1oo2, ldu),
+    pfdA:   (t, ldu) => pfd_inst_1oo2(t, ldu),
+    pfdB:   (tau, ldu) => q(tau, ldu),
+    formula: `
+      <b>Phase initiale — 1oo2 (avec CCF, &beta;=10%) :</b><br>
+      PFD(t) = <span class="fv">(1&minus;&beta;)&middot;q&sup2;(t)</span> + <span class="fv">&beta;&middot;q(t)</span>
+      &nbsp;avec q(t) = 1&minus;e<sup>&minus;&lambda;du&middot;t</sup> &rarr; <em>convexe vers le haut</em><br>
+      PFDavg &asymp; <span class="fv">(&lambda;du&middot;Ti/2)&sup2;</span> + <span class="fv">&beta;&middot;&lambda;du&middot;Ti/2</span><br><br>
+      <b class="f2">Phase dégradée — 1oo1 (simple capteur) :</b><br>
+      &Delta;PFD(&tau;) = <span class="fv">1&minus;e<sup>&minus;&lambda;du&middot;&tau;</sup> &asymp; &lambda;du&middot;&tau;</span>
+      &nbsp;&rarr; régime quasi-linéaire, pente très fortement accrue<br><br>
+      <span style="color:#facc15">PFD(t) = PFD(t&#8320;) + &Delta;PFD(t &minus; t&#8320;)</span>
+    `
+  }
+};
+
+let curSIL  = 2;
+let curArch = '2oo3';
+let myChart;
+
+function solveLambda(arch, sil) {
+  const target = SIL_DEF[sil].target;
+  const fn     = ARCH_DEF[arch].pfdavg;
+  let lo = 1e-14, hi = 10;
+  for (let i = 0; i < 100; i++) {
+    const mid = (lo + hi) / 2;
+    fn(mid) < target ? lo = mid : hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+function fmtSci(v) {
+  if (!isFinite(v) || v <= 0) return '—';
+  const e = Math.floor(Math.log10(v));
+  return (v / Math.pow(10, e)).toFixed(2) + 'E' + (e >= 0 ? '+' : '') + e;
+}
+function fmtH(h) {
+  if (h <= 0)  return '0 h';
+  if (h >= Ti) return '≥ Ti (toute la période)';
+  return Math.round(h) + ' h (' + Math.round(h/24) + ' j)';
+}
+
+// =====================================================
+//  RENDU
+// =====================================================
+function render() {
+  const silCfg  = SIL_DEF[curSIL];
+  const archCfg = ARCH_DEF[curArch];
+  const frac    = parseFloat(document.getElementById('degradeFrac').value);
+  const t0      = frac * Ti;
+  const ldu     = solveLambda(curArch, curSIL);
+  const PFD_MAX = silCfg.max;
+  const pfd0    = archCfg.pfdA(t0, ldu);
+
+  // Curseur
+  const dv = document.getElementById('degradeVal');
+  if (frac <= 0.005)      dv.textContent = 't₀ = 0 h (dégradation immédiate)';
+  else if (frac >= 0.995) dv.textContent = 't₀ = Ti (pas de dégradation)';
+  else                    dv.textContent = frac.toFixed(2) + ' · Ti = ' + Math.round(t0) + ' h';
+
+  document.getElementById('fparam-ldu').textContent = 'λdu = ' + fmtSci(ldu) + ' /h';
+
+  document.getElementById('sil-info').innerHTML =
+    'PFDmax = <span style="color:' + silCfg.color + '">' + fmtSci(PFD_MAX) + '</span><br>' +
+    'PFDcible = <span style="color:' + silCfg.color + '">' + fmtSci(silCfg.target) + '</span>';
+
+  document.getElementById('arch-info').innerHTML =
+    '<span style="color:var(--accent1)">' + archCfg.descA + '</span><br>' +
+    '<span style="color:var(--accent2)">' + archCfg.descB + '</span>';
+
+  document.getElementById('chart-title').textContent =
+    'PFD cumulée — ' + archCfg.labelA + ' → ' + archCfg.labelB + ' · SIL ' + curSIL;
+  document.getElementById('leg1').textContent = 'Phase ' + archCfg.labelA;
+  document.getElementById('leg2').textContent = 'Phase ' + archCfg.labelB + ' (dégradé)';
+  document.getElementById('formula-box').innerHTML = archCfg.formula;
+
+  document.getElementById('r-target').textContent = fmtSci(silCfg.target);
+  const pfdFinal = frac >= 0.999
+    ? archCfg.pfdA(Ti, ldu)
+    : pfd0 + archCfg.pfdB(Ti - t0, ldu);
+  document.getElementById('r-final').textContent = fmtSci(pfdFinal);
+
+  const el    = document.getElementById('r-heures');
+  const elSub = document.getElementById('r-heures-sub');
+  if (frac >= 0.999) {
+    el.innerHTML = 'Pas de dégradation'; el.style.color = 'var(--accent1)';
+    elSub.textContent = 'Architecture initiale maintenue sur tout Ti';
+  } else if (pfd0 >= PFD_MAX) {
+    el.innerHTML = '0 h — déjà non conforme !'; el.style.color = 'var(--red)';
+    elSub.textContent = 'PFD au point de dégradation ≥ PFDmax SIL ' + curSIL;
+  } else {
+    // pfd0 + q(tau, ldu) = PFD_MAX  => résoudre numériquement
+    const remaining = Ti - t0;
+    let tauMax = remaining;
+    if (pfd0 + archCfg.pfdB(remaining, ldu) > PFD_MAX) {
+      // bissection sur tau
+      let lo = 0, hi = remaining;
+      for (let i = 0; i < 60; i++) {
+        const mid = (lo + hi) / 2;
+        pfd0 + archCfg.pfdB(mid, ldu) < PFD_MAX ? lo = mid : hi = mid;
+      }
+      tauMax = (lo + hi) / 2;
+    }
+    if (tauMax >= remaining - 1) {
+      el.innerHTML = '≈ ' + Math.round(remaining) + ' h ✓'; el.style.color = 'var(--green)';
+      elSub.textContent = 'Conforme jusqu\'à fin Ti malgré la dégradation';
+    } else {
+      el.innerHTML = '≈ ' + Math.round(tauMax) + ' h'; el.style.color = 'var(--accent3)';
+      elSub.textContent =
+        'Non conforme à t ≈ ' + Math.round(t0 + tauMax) + ' h\n' +
+        '(soit ' + Math.round(tauMax) + ' h après dégradation)';
+    }
+  }
+
+  // Données graphique
+  const N = 500, split = Math.round(frac * N);
+  const labels = [], dataA = [], dataB = [], dataMax = [];
+
+  for (let i = 0; i <= N; i++) {
+    const t = (i / N) * Ti;
+    labels.push(Math.round(t));
+    dataMax.push(PFD_MAX);
+    if (frac >= 0.999) {
+      dataA.push(archCfg.pfdA(t, ldu)); dataB.push(null);
+    } else if (i <= split) {
+      dataA.push(archCfg.pfdA(t, ldu)); dataB.push(null);
+    } else {
+      dataA.push(null);
+      dataB.push(pfd0 + archCfg.pfdB(t - t0, ldu));
+    }
+  }
+  if (frac < 0.999 && split <= N) {
+    dataA[split] = pfd0;
+    dataB[split] = pfd0;
+  }
+
+  if (myChart) myChart.destroy();
+  const ctx = document.getElementById('myChart').getContext('2d');
+  myChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Phase ' + archCfg.labelA, data: dataA,
+          borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.04)',
+          borderWidth: 2.5, pointRadius: 0, spanGaps: false, tension: 0.05 },
+        { label: 'Phase ' + archCfg.labelB + ' (dégradé)', data: dataB,
+          borderColor: '#fb923c', backgroundColor: 'rgba(251,146,60,0.04)',
+          borderWidth: 2.5, pointRadius: 0, spanGaps: false, tension: 0.05 },
+        { label: 'PFDmax SIL ' + curSIL, data: dataMax,
+          borderColor: '#facc15', borderWidth: 1.5, borderDash: [6,4],
+          pointRadius: 0, fill: false },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 250 },
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: {
+          type: 'linear', min: 0, max: Ti,
+          title: { display: true, text: 'Temps (h)', color: '#7a8fa8', font: { family: 'JetBrains Mono', size: 10 } },
+          ticks: { color: '#7a8fa8', font: { family: 'JetBrains Mono', size: 9 }, maxTicksLimit: 9 },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+        },
+        y: {
+          type: 'linear', min: 0,
+          title: { display: true, text: 'PFD cumulée', color: '#7a8fa8', font: { family: 'JetBrains Mono', size: 10 } },
+          ticks: { color: '#7a8fa8', font: { family: 'JetBrains Mono', size: 9 },
+                   callback: v => v.toExponential(1), maxTicksLimit: 7 },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(15,22,35,0.95)',
+          borderColor: 'rgba(56,120,200,0.3)',
+          borderWidth: 1,
+          titleFont: { family: 'JetBrains Mono', size: 10 },
+          bodyFont:  { family: 'JetBrains Mono', size: 10 },
+          callbacks: {
+            title: items => 't = ' + items[0].label + ' h',
+            label: item => item.raw === null ? null : item.dataset.label + ' : ' + item.raw.toExponential(3)
+          }
+        }
+      }
+    }
+  });
+
+  // Auto-resize iFrame parent
+  notifyResize();
+}
+
+// =====================================================
+//  AUTO-RESIZE pour iFrame WordPress
+// =====================================================
+function notifyResize() {
+  try {
+    const h = document.body.scrollHeight;
+    window.parent.postMessage({ type: 'pfd-resize', height: h }, '*');
+  } catch(e) {}
+}
+
+const ro = new ResizeObserver(notifyResize);
+ro.observe(document.body);
+
+// =====================================================
+//  SÉLECTEURS
+// =====================================================
+function setSIL(n) {
+  curSIL = n;
+  const cls = { 1: 'active-green', 2: 'active-blue', 3: 'active-gold' };
+  [1,2,3].forEach(s => {
+    document.getElementById('btn-sil'+s).className =
+      'btn-opt' + (s === n ? ' ' + cls[s] : '');
+  });
+  render();
+}
+function setArch(a) {
+  curArch = a;
+  document.getElementById('btn-arch-2oo3').className = 'btn-opt' + (a==='2oo3' ? ' active-blue' : '');
+  document.getElementById('btn-arch-1oo2').className = 'btn-opt' + (a==='1oo2' ? ' active-org'  : '');
+  render();
+}
+document.getElementById('degradeFrac').addEventListener('input', render);
+
+// Init
+setSIL(2);
+setArch('2oo3');
+</script>
+
+<!-- =====================================================
+     SNIPPET À COLLER DANS VOTRE PAGE WORDPRESS
+     (dans un widget HTML Elementor, en dehors de l'iFrame)
+     ======================================================
+<script>
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'pfd-resize') {
+    var iframe = document.querySelector('iframe[src*="pfd_degradation"]');
+    if (iframe) iframe.style.height = (e.data.height + 20) + 'px';
+  }
+});
+</script>
+
+Intégration iFrame :
+<iframe src="https://VOTRE-DOMAINE.com/wp-content/uploads/pfd_degradation.html"
+  id="pfd-iframe"
+  width="100%"
+  height="800px"
+  style="border:none; border-radius:12px; display:block;"
+  scrolling="no"
+  loading="lazy">
+</iframe>
+====================================================== -->
+
+</body>
+</html>
