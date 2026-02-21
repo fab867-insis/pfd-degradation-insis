@@ -2,15 +2,16 @@
 
 Outil interactif de visualisation de la **Probability of Failure on Demand (PFD)** lors d'une dégradation d'architecture de fonction instrumentée de sécurité (SIF), selon les normes **IEC 61508 / IEC 61511**.
 
-> **Démo live** → [lien vers votre site]
+> **Démo live** → https://insis.fr/outils-ressources/sil-pfd-test-periodique/
+
 
 ---
 
 ## Présentation
 
-Quand un équipement d'une SIF tombe en panne ou part en maintenance, l'architecture se dégrade : un 2oo3 devient 2oo2 ou 1oo2, un 1oo2 devient 1oo1, etc. La PFD de la fonction évolue alors différemment, avec deux effets simultanés souvent sous-estimés :
+Généralement lorsqu'un équipement d'une SIF tombe en panne ou part en maintenance, l'exploitant souhaitera maintenir en marche son procédé. Pour cela, si l'architecture est redondante, il souhaitera dégrader l'architecture : un 2oo3 devient 2oo2 ou 1oo2, un 1oo2 devient 1oo1, etc. La PFD de la fonction évolue alors différemment, avec deux effets simultanés souvent sous-estimés :
 
-- un **saut discontinu** à l'instant de la dégradation (les éléments restants ont accumulé de l'unreliabilité depuis la mise en service — ils ne sont pas remis à neuf)
+- un **saut discontinu** à l'instant de la dégradation (les éléments restants ont accumulé une défiabilité (unreliability) depuis la mise en service — ils ne sont pas remis à neuf)
 - un **changement de pente** de la courbe PFD(t), lié à la perte de redondance
 
 L'outil permet d'explorer ces effets en faisant varier le moment de la dégradation t₀, le SIL cible, l'architecture et le taux de défaillance λdu.
@@ -112,4 +113,9 @@ window.addEventListener('message', function(e) {
 
 ## Licence
 
-MIT
+Utilisation libre à des fins personnelles et professionnelles, sous réserve de conserver
+la mention suivante visible sur toute page ou support intégrant cet outil :
+
+> *Outil développé par Fabien CIUTAT — https://insis.fr/
+
+Merci de ne pas supprimer ce crédit ni de redistribuer l'outil sans attribution.
